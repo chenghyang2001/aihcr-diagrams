@@ -115,6 +115,27 @@
     }
     .thumb.active           { opacity: 1;    border-color: #38bdf8; }
     .thumb:hover:not(.active) { opacity: 0.75; }
+
+    /* ── Autoplay ── */
+    #progress-bar { height: 3px; background: linear-gradient(90deg, #38bdf8, #7dd3fc); width: 0%; flex-shrink: 0; display: none; }
+    #autoplay-wrap { position: relative; display: flex; align-items: center; flex-shrink: 0; }
+    #play-btn { padding: 4px 12px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); color: #7dd3fc; font-size: 0.72rem; cursor: pointer; border-radius: 6px 0 0 6px; white-space: nowrap; transition: background 0.15s; }
+    #play-btn:hover, #play-btn.playing { background: rgba(56,189,248,0.18); }
+    #dd-toggle { padding: 4px 7px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); border-left: none; color: #7dd3fc; font-size: 0.72rem; cursor: pointer; border-radius: 0 6px 6px 0; transition: background 0.15s; }
+    #dd-toggle:hover { background: rgba(56,189,248,0.18); }
+    #auto-dropdown { position: absolute; top: calc(100% + 6px); right: 0; background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 6px 0; min-width: 130px; z-index: 100; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+    #auto-dropdown.open { display: block; }
+    .dd-speed { padding: 7px 16px 7px 32px; font-size: 0.75rem; color: #94a3b8; cursor: pointer; position: relative; transition: background 0.12s; }
+    .dd-speed:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+    .dd-speed.active { color: #38bdf8; }
+    .dd-speed.active::before { content: '✓'; position: absolute; left: 14px; color: #38bdf8; }
+    .dd-divider { height: 1px; background: #334155; margin: 4px 0; }
+    .dd-loop { padding: 7px 16px; font-size: 0.75rem; color: #94a3b8; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.12s; }
+    .dd-loop:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+    .loop-check { width: 14px; height: 14px; border: 1.5px solid #475569; border-radius: 3px; flex-shrink: 0; position: relative; display: flex; align-items: center; justify-content: center; }
+    .dd-loop.active { color: #38bdf8; }
+    .dd-loop.active .loop-check { border-color: #38bdf8; background: rgba(56,189,248,0.15); }
+    .dd-loop.active .loop-check::after { content: '✓'; font-size: 0.65rem; color: #38bdf8; }
   </style>
 </head>
 <body>
@@ -122,8 +143,20 @@
 <div id="header">
   <div id="title">載入中…</div>
   <div id="counter">— / 10</div>
-  <div id="hint">← → 換圖 &nbsp;·&nbsp; 滾輪縮放 &nbsp;·&nbsp; 拖曳平移 &nbsp;·&nbsp; 雙擊還原</div>
+  <div id="autoplay-wrap">
+    <button id="play-btn" title="自動播放 / 暫停 (Space)">▶ 自動播放</button>
+    <button id="dd-toggle" title="播放設定">▾</button>
+    <div id="auto-dropdown">
+      <div class="dd-speed active" data-ms="5000">每隔 5 秒</div>
+      <div class="dd-speed" data-ms="10000">每隔 10 秒</div>
+      <div class="dd-speed" data-ms="15000">每隔 15 秒</div>
+      <div class="dd-speed" data-ms="30000">每隔 30 秒</div>
+      <div class="dd-divider"></div>
+      <div class="dd-loop active" id="loop-item"><span class="loop-check"></span>循環播放</div>
+    </div>
+  </div>
 </div>
+<div id="progress-bar"></div>
 
 <div id="viewer">
   <button class="nav-btn" id="prev-btn" aria-label="上一張">&#8592;</button>
@@ -195,6 +228,7 @@ function goTo(idx) {
     t.classList.toggle('active', i === current);
     if (i === current) t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   });
+  resetAutoTimer();
 }
 
 // ── Thumbnails ─────────────────────────────────────────────
@@ -214,6 +248,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft')              goTo(current - 1);
   else if (e.key === 'ArrowRight')        goTo(current + 1);
   else if (e.key === 'Escape' || e.key === '0') fitImage();
+  else if (e.key === ' ') { e.preventDefault(); autoTimer ? stopAutoplay() : startAutoplay(); }
 });
 
 // ── Button clicks ──────────────────────────────────────────
@@ -264,6 +299,59 @@ viewer.addEventListener('dblclick', fitImage);
 
 // ── Resize ────────────────────────────────────────────────
 window.addEventListener('resize', fitImage);
+
+// ── Autoplay ───────────────────────────────────────────────
+const playBtn  = document.getElementById('play-btn');
+const ddToggle = document.getElementById('dd-toggle');
+const ddMenu   = document.getElementById('auto-dropdown');
+const loopItem = document.getElementById('loop-item');
+const progBar  = document.getElementById('progress-bar');
+
+let autoSpeed = 5000, autoLoop = true, autoTimer = null, progTimer = null, progStart = 0;
+
+function startAutoplay() {
+  clearInterval(autoTimer); clearInterval(progTimer);
+  progStart = Date.now();
+  autoTimer = setInterval(autoAdvance, autoSpeed);
+  progTimer = setInterval(updateProgress, 50);
+  progBar.style.display = 'block'; progBar.style.width = '0%';
+  playBtn.textContent = '⏸ 暫停'; playBtn.classList.add('playing');
+}
+function stopAutoplay() {
+  clearInterval(autoTimer); clearInterval(progTimer); autoTimer = progTimer = null;
+  progBar.style.width = '0%'; progBar.style.display = 'none';
+  playBtn.textContent = '▶ 自動播放'; playBtn.classList.remove('playing');
+}
+function updateProgress() {
+  progBar.style.width = Math.min(((Date.now() - progStart) / autoSpeed) * 100, 100) + '%';
+}
+function autoAdvance() {
+  const isLast = current >= IMAGES.length - 1;
+  if (isLast && !autoLoop) { stopAutoplay(); return; }
+  goTo(current + 1);
+}
+function resetAutoTimer() {
+  if (!autoTimer) return;
+  clearInterval(autoTimer); clearInterval(progTimer);
+  progStart = Date.now();
+  autoTimer = setInterval(autoAdvance, autoSpeed);
+  progTimer = setInterval(updateProgress, 50);
+  progBar.style.width = '0%';
+}
+
+playBtn.addEventListener('click', () => autoTimer ? stopAutoplay() : startAutoplay());
+ddToggle.addEventListener('click', e => { e.stopPropagation(); ddMenu.classList.toggle('open'); });
+document.addEventListener('click', () => ddMenu.classList.remove('open'));
+ddMenu.addEventListener('click', e => e.stopPropagation());
+document.querySelectorAll('.dd-speed').forEach(el => {
+  el.addEventListener('click', () => {
+    autoSpeed = parseInt(el.dataset.ms);
+    document.querySelectorAll('.dd-speed').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = setInterval(autoAdvance, autoSpeed); progStart = Date.now(); }
+  });
+});
+loopItem.addEventListener('click', () => { autoLoop = !autoLoop; loopItem.classList.toggle('active', autoLoop); });
 </script>
 </body>
 </html>
