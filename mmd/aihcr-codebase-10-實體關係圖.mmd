@@ -1,0 +1,101 @@
+erDiagram
+    FIELDS {
+        int room_id PK
+        int house_id FK
+        string room_name
+        string user_name
+        string type
+        string category
+    }
+
+    DEVICES {
+        int device_id PK
+        int room_id FK
+        string model
+        string mac_address
+        string fw_version
+        bool online
+    }
+
+    CONTROL_EVENTS {
+        int event_id PK
+        int room_id FK
+        int device_id FK
+        string event_type
+        string detail
+        string source
+        datetime created_at
+    }
+
+    FIELD_DAILY {
+        date date PK
+        int room_id PK
+        float pm25_avg
+        float pm25_max
+        string category
+        int total_rows
+        int valid_rows
+        string data_quality
+    }
+
+    TASK_TRACKER {
+        string task_id PK
+        int room_id FK
+        date date
+        string title
+        string status
+        string priority
+    }
+
+    VERSION_DIFF {
+        string version PK
+        date date
+        string change_type
+        string description
+        string affected_models
+    }
+
+    BOM_CURRENT {
+        string part_id PK
+        string model
+        string part_name
+        string category
+        float unit_cost_twd
+        string supplier
+    }
+
+    BOM_HISTORY {
+        string part_id FK
+        string version FK
+        date date
+        float old_cost_twd
+        float new_cost_twd
+        float change_pct
+    }
+
+    COORDINATION_HISTORY {
+        date date PK
+        int rank PK
+        string topic
+        string rationale
+        string source_agents
+        string suggested_action
+    }
+
+    MYSQL_MEDIAN {
+        int room_id FK
+        datetime created_at
+        float pm25
+        float voc
+        float temp
+        float humidity
+    }
+
+    FIELDS ||--o{ DEVICES : "house 擁有"
+    FIELDS ||--o{ CONTROL_EVENTS : "觸發"
+    FIELDS ||--o{ FIELD_DAILY : "每日快照"
+    FIELDS ||--o{ TASK_TRACKER : "產生任務"
+    FIELDS ||--o{ MYSQL_MEDIAN : "讀取感測值"
+    DEVICES ||--o{ CONTROL_EVENTS : "控制動作"
+    VERSION_DIFF ||--o{ BOM_HISTORY : "版本關聯"
+    BOM_CURRENT ||--o{ BOM_HISTORY : "歷史記錄"

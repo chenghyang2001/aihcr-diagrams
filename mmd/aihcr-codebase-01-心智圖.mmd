@@ -1,0 +1,75 @@
+mindmap
+  root((AIHCR Daily 系統))
+    每日閉環 Agents
+      field_trial
+        PM2.5+VOC 分析
+        68 rooms 分類
+      release_manager
+        任務管理
+        版本追蹤
+        資料健康
+      bom_validator
+        BOM 完整性
+        變動紀錄
+      coordinator
+        Top-3 優先事項
+        歷史累積
+      notifier
+        Telegram
+        LINE
+        Gmail
+    手動獨立 Agents
+      edge_inspector
+        版本清查
+        風速查詢
+      system_architect
+        一致性稽核
+        架構快照
+      cost_down
+        降本分析
+        BOM 差異
+    程式庫 lib
+      db.py
+        MySQL retry 3x
+        Room 展開 41→68
+        VOC 故障偵測
+      ai.py
+        Claude CLI 封裝
+        claude-sonnet-4-6
+      notify.py
+        三管道封裝
+      history.py
+        CSV 歷史讀寫
+        Schema 遷移
+      data_health.py
+        六資料表稽核
+      rules.py
+        PM2.5 規則引擎
+        VOC 閾值
+    資料層
+      MySQL RDS
+        zap_api 唯讀
+        median 感測表
+      六本地 CSV
+        fields 場域主表
+        devices 裝置主表
+        control_events
+        version_diff
+        bom_current
+        bom_history
+      每日 output
+        field_trial_summary
+        coordination_plan
+        coordination_history
+    部署架構
+      本機 PC
+        開發源頭
+        git push
+      GitHub main
+        CI 語法檢查
+        Pages 報告托管
+      NUC 主執行層
+        cron 04:00
+        flock 防並行
+      VPS 備援層
+        NUC 不可達時

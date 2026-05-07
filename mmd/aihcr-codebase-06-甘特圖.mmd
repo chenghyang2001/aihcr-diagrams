@@ -1,0 +1,27 @@
+gantt
+    title AIHCR 每日閉環 執行時間（2026-05-05 10:22–10:31 實測）
+    dateFormat  HH:mm
+    axisFormat  %H:%M
+
+    section Agent 1 — field_trial（共 6m 42s）
+    MySQL JOIN ON 查詢 82 rooms     :done, a1, 10:22, 1m
+    CSV 持久化 + 事件記錄 spike/heartbeat/voc :done, a2, after a1, 1m
+    Claude 分析（prompt ~4800 tok）  :crit, done, a3, after a2, 5m
+
+    section Agent 2 — release_manager（共 43s）
+    task_manager auto resolve + Claude :done, b1, after a3, 1m
+    data_health 六表稽核 + release_note :done, b2, after b1, 1m
+
+    section Agent 3 — bom_validator（~2s）
+    BOM CSV 讀取 + 報告生成         :done, c1, after b2, 1m
+
+    section Agent 4 — coordinator（共 56s）
+    collect 6 份輸出（各截 8KB）     :done, d1, after c1, 1m
+    Claude Top-3 分析（~5008 tok）  :crit, done, d2, after d1, 1m
+
+    section Git + GitHub Pages（共 37s）
+    git commit + push              :done, e1, after d2, 1m
+    Pages build poll（30s × 1 次）  :done, e2, after e1, 1m
+
+    section Agent 5 — notifier（~5s）
+    Telegram + LINE + Gmail        :done, f1, after e2, 1m

@@ -1,0 +1,23 @@
+block-beta
+  columns 3
+
+  DEV["🖥️ 本機 PC\n開發源頭\nagents/ lib/ data/\nreferences/ config.json"]
+  GH["☁️ GitHub\nmain branch\nCI 語法檢查\nPages 報告托管"]
+  NUC["🏠 NUC 192.168.51.33\n主執行層\ncron 04:00\norchestrator.sh"]
+
+  MYSQL[("🗄️ MySQL RDS\nzap_api 唯讀\nmedian 感測表\n41戶→68 rooms")]
+  REF["📋 References\nthresholds.md\nreport-template.md\npm25_rules.yaml"]
+  CSV[("📁 六本地 CSV\nfields devices\ncontrol_events\nbom_current/history")]
+
+  TG["📲 Telegram\nBot API\n即時推送"]
+  LN["💬 LINE\nMessaging API\n即時推送"]
+  GM["📧 Gmail SMTP\nHTML 報告\n3 位收件人"]
+
+  DEV --> GH
+  GH --> NUC
+  NUC --> MYSQL
+  NUC --> REF
+  NUC --> CSV
+  NUC --> TG
+  NUC --> LN
+  NUC --> GM

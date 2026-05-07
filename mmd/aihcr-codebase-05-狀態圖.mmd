@@ -1,0 +1,61 @@
+stateDiagram-v2
+    direction TB
+
+    [*] --> missing
+
+    state "missing\n（total_rows == 0，Edge 完全離線）" as missing
+    state "heartbeat_only\n（valid_rows == 0，Edge 在線但無有效讀值）" as heartbeat_only
+    state "spike\n（pm25_max > 100，緊急異常）" as spike
+    state "watch\n（pm25_avg > 0，持續監控）" as watch
+    state "green\n（pm25_avg == 0，達標）" as green
+
+    missing --> heartbeat_only : Edge 上線，但感測值全為 0
+    missing --> spike         : Edge 上線，pm25_max > 100
+    missing --> watch         : Edge 上線，pm25_avg > 0
+    missing --> green         : Edge 上線，pm25_avg == 0
+
+    heartbeat_only --> missing       : Edge 再次離線
+    heartbeat_only --> spike         : 有效讀值出現，pm25_max > 100
+    heartbeat_only --> watch         : 有效讀值出現，pm25_avg > 0
+    heartbeat_only --> green         : 有效讀值出現，pm25_avg == 0
+
+    spike --> watch  : pm25_max <= 100，avg > 0
+    spike --> green  : pm25_avg == 0
+    spike --> missing: Edge 離線
+
+    watch --> spike  : pm25_max > 100
+    watch --> green  : pm25_avg == 0
+    watch --> missing: Edge 離線
+
+    green --> watch  : pm25_avg > 0
+    green --> spike  : pm25_max > 100
+    green --> missing: Edge 離線
+
+    note right of spike
+        自動建立 Task（T{YYYYMMDD}-{seq}）
+        pm25_max 恢復 <= 100 → Task auto resolve
+        log_control_event: spike_detected
+    end note
+
+    note right of heartbeat_only
+        log_control_event: heartbeat_only_detected
+        建議先確認 Edge 在線狀態
+        不直接判定為感測器故障
+    end note
+
+    note left of missing
+        完全無資料（missing_room_ids）
+        Edge gateway 不在線
+        與 heartbeat_only 的差異
+        在於 total_rows 是否 > 0
+    end note
+
+    state "VOC 狀態（與 PM2.5 分類正交）" as voc_state {
+        [*] --> voc_normal
+        voc_normal : voc_normal（voc_max > 0）
+        voc_broken_state : voc_broken\n（voc_max==0 且 fw 非舊版 且 total_rows>0）
+        voc_legacy : voc_legacy\n（voc_max IS NULL，舊韌體無 VOC 支援）
+        voc_normal --> voc_broken_state : 24h 讀值全為 0
+        voc_broken_state --> voc_normal : 非零讀值出現
+        [*] --> voc_legacy
+    }

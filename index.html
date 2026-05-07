@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIHCR Codebase 圖表瀏覽器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ── Header ── */
+    #header {
+      padding: 10px 20px;
+      background: rgba(0,0,0,0.55);
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #title   { font-size: 1rem; font-weight: 600; letter-spacing: 0.04em; }
+    #counter { font-size: 0.85rem; color: #94a3b8; }
+    #hint    { font-size: 0.72rem; color: #475569; }
+
+    /* ── Viewer ── */
+    #viewer {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: #0f172a;
+      cursor: grab;
+    }
+    #viewer.dragging { cursor: grabbing; }
+
+    #main-img {
+      position: absolute;
+      left: 0; top: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+      max-width: none;
+      max-height: none;
+      transition: opacity 0.18s;
+      pointer-events: none;
+    }
+
+    /* ── Nav buttons ── */
+    .nav-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: #e2e8f0;
+      font-size: 1.4rem;
+      width: 44px;
+      height: 80px;
+      cursor: pointer;
+      border-radius: 8px;
+      z-index: 10;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,0.2); }
+    #prev-btn { left: 10px; }
+    #next-btn { right: 10px; }
+
+    /* ── Scale badge ── */
+    #scale-badge {
+      position: absolute;
+      bottom: 12px;
+      right: 56px;
+      background: rgba(0,0,0,0.6);
+      color: #94a3b8;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    /* ── Thumbnails ── */
+    #thumbnails {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.55);
+      border-top: 1px solid #1e293b;
+      overflow-x: auto;
+      flex-shrink: 0;
+      scrollbar-width: thin;
+      scrollbar-color: #334155 transparent;
+    }
+    .thumb {
+      width: 72px;
+      height: 48px;
+      object-fit: cover;
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0.4;
+      border: 2px solid transparent;
+      transition: opacity 0.15s, border-color 0.15s;
+      flex-shrink: 0;
+    }
+    .thumb.active           { opacity: 1;    border-color: #38bdf8; }
+    .thumb:hover:not(.active) { opacity: 0.75; }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <div id="title">載入中…</div>
+  <div id="counter">— / 10</div>
+  <div id="hint">← → 換圖 &nbsp;·&nbsp; 滾輪縮放 &nbsp;·&nbsp; 拖曳平移 &nbsp;·&nbsp; 雙擊還原</div>
+</div>
+
+<div id="viewer">
+  <button class="nav-btn" id="prev-btn" aria-label="上一張">&#8592;</button>
+  <img id="main-img" src="" alt="">
+  <button class="nav-btn" id="next-btn" aria-label="下一張">&#8594;</button>
+  <div id="scale-badge">100%</div>
+</div>
+
+<div id="thumbnails"></div>
+
+<script>
+const IMAGES = [
+  { file: 'png/aihcr-codebase-01-心智圖.png',     label: '01 心智圖' },
+  { file: 'png/aihcr-codebase-02-流程圖.png',     label: '02 流程圖' },
+  { file: 'png/aihcr-codebase-03-系統架構圖.png', label: '03 系統架構圖' },
+  { file: 'png/aihcr-codebase-04-序列圖.png',     label: '04 序列圖' },
+  { file: 'png/aihcr-codebase-05-狀態圖.png',     label: '05 狀態圖' },
+  { file: 'png/aihcr-codebase-06-甘特圖.png',     label: '06 甘特圖' },
+  { file: 'png/aihcr-codebase-07-象限圖.png',     label: '07 象限圖' },
+  { file: 'png/aihcr-codebase-08-時間軸.png',     label: '08 時間軸' },
+  { file: 'png/aihcr-codebase-09-類別圖.png',     label: '09 類別圖' },
+  { file: 'png/aihcr-codebase-10-實體關係圖.png', label: '10 實體關係圖' },
+];
+
+const img       = document.getElementById('main-img');
+const viewer    = document.getElementById('viewer');
+const titleEl   = document.getElementById('title');
+const counterEl = document.getElementById('counter');
+const thumbsEl  = document.getElementById('thumbnails');
+const badge     = document.getElementById('scale-badge');
+
+let current = 0;
+let scale = 1, tx = 0, ty = 0;
+
+// ── Transform ──────────────────────────────────────────────
+function applyTransform() {
+  // matrix(sx,shy,shx,sy,tx,ty): natural (lx,ly) → (scale*lx+tx, scale*ly+ty)
+  img.style.transform = `matrix(${scale},0,0,${scale},${tx},${ty})`;
+  badge.textContent = Math.round(scale * 100) + '%';
+}
+
+function fitImage() {
+  const vw = viewer.clientWidth;
+  const vh = viewer.clientHeight;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  if (!iw || !ih) return;
+
+  const PAD = 24;
+  scale = Math.min((vw - PAD * 2) / iw, (vh - PAD * 2) / ih);
+  tx = (vw - iw * scale) / 2;
+  ty = (vh - ih * scale) / 2;
+  applyTransform();
+}
+
+// ── Navigation ─────────────────────────────────────────────
+function goTo(idx) {
+  current = ((idx % IMAGES.length) + IMAGES.length) % IMAGES.length;
+  const item = IMAGES[current];
+
+  img.style.opacity = '0';
+  img.src = item.file;
+  img.onload = () => { fitImage(); img.style.opacity = '1'; };
+
+  titleEl.textContent = item.label;
+  counterEl.textContent = `${current + 1} / ${IMAGES.length}`;
+
+  document.querySelectorAll('.thumb').forEach((t, i) => {
+    t.classList.toggle('active', i === current);
+    if (i === current) t.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  });
+}
+
+// ── Thumbnails ─────────────────────────────────────────────
+IMAGES.forEach((item, i) => {
+  const t = document.createElement('img');
+  t.src   = item.file;
+  t.className = 'thumb' + (i === 0 ? ' active' : '');
+  t.title = item.label;
+  t.addEventListener('click', () => goTo(i));
+  thumbsEl.appendChild(t);
+});
+
+goTo(0);
+
+// ── Keyboard ───────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')              goTo(current - 1);
+  else if (e.key === 'ArrowRight')        goTo(current + 1);
+  else if (e.key === 'Escape' || e.key === '0') fitImage();
+});
+
+// ── Button clicks ──────────────────────────────────────────
+document.getElementById('prev-btn').addEventListener('click', () => goTo(current - 1));
+document.getElementById('next-btn').addEventListener('click', () => goTo(current + 1));
+
+// ── Scroll to zoom (cursor-centred) ───────────────────────
+// Math: keep the natural image pixel under the cursor fixed.
+// natural_x = (cx - tx) / scale  →  after zoom:  tx' = cx - natural_x * newScale
+viewer.addEventListener('wheel', e => {
+  e.preventDefault();
+  const factor   = e.deltaY < 0 ? 1.13 : 1 / 1.13;
+  const newScale = Math.min(Math.max(scale * factor, 0.1), 25);
+
+  const vRect = viewer.getBoundingClientRect();
+  const cx = e.clientX - vRect.left;
+  const cy = e.clientY - vRect.top;
+
+  tx = cx - (cx - tx) * (newScale / scale);
+  ty = cy - (cy - ty) * (newScale / scale);
+  scale = newScale;
+  applyTransform();
+}, { passive: false });
+
+// ── Drag to pan ────────────────────────────────────────────
+let dragging = false, dragX = 0, dragY = 0, txStart = 0, tyStart = 0;
+
+viewer.addEventListener('mousedown', e => {
+  if (e.button !== 0 || e.target.classList.contains('nav-btn')) return;
+  dragging = true;
+  dragX = e.clientX; dragY = e.clientY;
+  txStart = tx; tyStart = ty;
+  viewer.classList.add('dragging');
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  tx = txStart + (e.clientX - dragX);
+  ty = tyStart + (e.clientY - dragY);
+  applyTransform();
+});
+document.addEventListener('mouseup', () => {
+  dragging = false;
+  viewer.classList.remove('dragging');
+});
+
+// ── Double-click to reset ──────────────────────────────────
+viewer.addEventListener('dblclick', fitImage);
+
+// ── Resize ────────────────────────────────────────────────
+window.addEventListener('resize', fitImage);
+</script>
+</body>
+</html>

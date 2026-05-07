@@ -1,0 +1,101 @@
+sequenceDiagram
+  autonumber
+  participant CRON as ⏰ Cron<br/>04:00
+  participant ORCH as orchestrator.sh
+  participant FT as field_trial.py
+  participant DB as lib/db.py
+  participant RDS as MySQL RDS<br/>zap_api
+  participant AI as lib/ai.py<br/>Claude CLI
+  participant RM as release_manager.py
+  participant TM as task_manager.py
+  participant CO as coordinator.py
+  participant NT as notifier.py
+  participant NOTIFY as Telegram/LINE<br/>Gmail
+
+  CRON->>ORCH: 觸發 orchestrator.sh
+  ORCH->>ORCH: flock -n（取得鎖，防並行）
+
+  rect rgb(255, 240, 230)
+    Note over ORCH,RDS: Agent 1 — field_trial.py（FATAL on fail）
+    ORCH->>FT: run(date)
+    FT->>DB: query_all()
+    DB->>DB: get_connection()
+
+    loop retry（最多 3 次，間隔 5s）
+      DB->>RDS: pymysql.connect()
+      alt 連線成功
+        RDS-->>DB: connection OK
+      else 連線失敗
+        DB->>DB: sleep(5s)
+      end
+    end
+
+    DB->>RDS: SELECT JOIN ON rooms/houses/median<br/>（24h 視窗，含 VOC 欄位）
+    RDS-->>DB: 82 rows（PM2.5, VOC, total_rows...）
+    DB->>DB: 分類（spike/watch/green/heartbeat_only）
+    DB->>DB: voc_broken 三條件偵測
+    DB-->>FT: {summary, rooms[], house_summary[]}
+
+    FT->>FT: append_field_daily() → field_daily.csv
+    FT->>DB: log_control_event(spike_detected × 4)
+    FT->>DB: log_control_event(heartbeat_only × 14)
+    FT->>DB: log_control_event(voc_broken × 1)
+    DB->>DB: 寫入 control_events.csv
+
+    FT->>AI: claude_analyze(prompt)
+    AI->>AI: claude -p --model claude-sonnet-4-6
+    Note right of AI: timeout 600s
+    AI-->>FT: ---FILE:field_trial_summary.md---
+    FT->>FT: 寫 field_trial_summary.md
+    FT-->>ORCH: {summary, report_path, data}
+  end
+
+  rect rgb(234, 244, 251)
+    Note over ORCH,TM: Agent 2 — release_manager.py
+    ORCH->>RM: run(date)
+    RM->>TM: task_manager.run(date, field_result)
+    TM->>TM: auto_resolve_tasks()
+    TM->>AI: claude_analyze(task prompt)
+    AI-->>TM: 新任務清單
+    TM->>TM: 更新 task_tracker.csv
+    TM-->>RM: {pending 30, resolved 25}
+    RM->>RM: run_health_check() → data_health.md
+    RM->>RM: build_release_note() → release_note.md
+    RM-->>ORCH: 完成
+  end
+
+  rect rgb(254, 249, 231)
+    Note over ORCH: Agent 3 — bom_validator.py
+    ORCH->>ORCH: python bom_validator.py
+    Note right of ORCH: bom_status.md
+  end
+
+  rect rgb(234, 250, 241)
+    Note over ORCH,CO: Agent 4 — coordinator.py
+    ORCH->>CO: run(date)
+    CO->>CO: collect_inputs()<br/>讀 6 份 agent 輸出（各 8KB 截斷）
+    CO->>AI: claude_analyze(coordination prompt)
+    Note right of AI: L1: 20,000 char 上限<br/>L2: max 5 calls/day
+    AI-->>CO: JSON {top3[], overall_assessment}
+    CO->>CO: 寫 coordination_plan.md
+    CO->>CO: 追加 coordination_history.csv
+    CO-->>ORCH: 完成
+  end
+
+  ORCH->>ORCH: git commit + push → GitHub Pages
+  ORCH->>ORCH: poll Pages build（4×30s）
+
+  rect rgb(245, 238, 248)
+    Note over ORCH,NOTIFY: Agent 5 — notifier.py
+    ORCH->>NT: run(date)
+    NT->>NT: extract_summary_lines()
+    NT->>NT: read_coordination_summary()
+    NT->>NOTIFY: send_telegram()
+    NT->>NOTIFY: send_line()
+    NT->>NOTIFY: send_gmail()
+    NOTIFY-->>NT: 全部成功
+    NT->>NT: 寫 summary.json
+    NT-->>ORCH: 完成
+  end
+
+  ORCH->>ORCH: 釋放 flock

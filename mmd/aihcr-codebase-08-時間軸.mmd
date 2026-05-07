@@ -1,0 +1,42 @@
+timeline
+    title AIHCR Daily 開發里程碑（Sessions 1–12 + 本次）
+
+    section Phase 0 — 初始化
+        2026-04-08 : S1 多 Agent 架構初始化
+                   : notifier.py 三管道通知
+                   : field_trial + release_manager 雛形
+
+    section Phase 1 — 核心功能
+        2026-04-09 : S2-S3 4→3 Agent 精簡
+                   : LINE Messaging API 整合
+                   : PM2.5 分類規則重設計
+        2026-04-10 : S4-S5 Release Manager 升級
+                   : BOM Validator 新增
+                   : Coordinator + Top-3 機制
+                   : lib/rules.py 規則引擎
+
+    section Phase 2 — 部署穩固
+        2026-04-13 : S6-S7 NUC 三層權威架構確立
+                   : deploy.sh 一鍵部署腳本
+                   : aihcr-deployment.md 全域規則
+        2026-04-14 : S8-S9 cron 雙時段 05:02+17:02
+                   : flock 防並行保護
+                   : GitHub Actions CI 語法檢查
+
+    section Phase 3 — 擴展監控
+        2026-04-15 : S10 fields.csv 動態展開
+                   : 41 戶 → 68 rooms（MySQL JOIN）
+                   : room_cache.json 離線備援
+        2026-04-17 : S11 house/room ID 配對格式定版
+                   : 5 張 Mermaid 架構流程圖
+                   : Edge Inspector 獨立排程
+        2026-04-22 : S12 Hermes Agent v0.10 安裝
+                   : NUC 本地 LLM 實驗（gemma4 26b）
+                   : Dashboard quickview JSON
+
+    section Phase 4 — 韌性強化
+        2026-05-05 : 本次 VOC 感測器故障偵測
+                   : DB retry 3x/5s + email 告警
+                   : JOIN ON 替換 WHERE 查詢
+                   : cron 改為每日一次 04:00
+                   : GitNexus 重新索引 583 symbols

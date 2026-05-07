@@ -1,0 +1,166 @@
+classDiagram
+    direction TB
+
+    %% ── 唯一真正的 class ──
+    class JSONEncoder {
+        <<stdlib>>
+        +encode(obj) str
+        +default(obj) str
+    }
+
+    class DecimalEncoder {
+        <<lib/db.py>>
+        +default(obj) str
+    }
+    JSONEncoder <|-- DecimalEncoder : 繼承（Decimal → float）
+
+    %% ── lib 模組 ──
+    class db {
+        <<module: lib/db.py>>
+        -_DB_FAILURE_NOTIFIED bool
+        +MAX_RETRY = 3
+        +RETRY_INTERVAL = 5
+        +get_connection() Connection
+        +query_24h(conn) list
+        +query_all() dict
+        +load_all_rooms() list
+        +log_control_event()
+        +query_edges() list
+        +query_fan_speed(edge_id) dict
+        -_notify_db_failure(error)
+    }
+
+    class ai {
+        <<module: lib/ai.py>>
+        +claude_analyze(prompt) str
+        +extract_file_content(raw, filename) str
+        -_find_claude_cmd() str
+    }
+
+    class notify {
+        <<module: lib/notify.py>>
+        +send_telegram(message) bool
+        +send_line(message) bool
+        +send_gmail(subject, body) bool
+    }
+
+    class history {
+        <<module: lib/history.py>>
+        +load_fields() list
+        +load_task_tracker() list
+        +append_field_daily(date, rooms)
+        +save_task_tracker(tasks)
+        +get_next_task_id(date) str
+        -_migrate_header_if_needed()
+    }
+
+    class data_health {
+        <<module: lib/data_health.py>>
+        +run_health_check(quick) dict
+        +check_csv(name, config) dict
+        +check_mysql(name) dict
+        +format_report(results) str
+    }
+
+    class rules {
+        <<module: lib/rules.py>>
+        +RULES_VERSION = "v1.0"
+        +evaluate_room() str
+        +evaluate_room_voc() str
+        +get_device_action() dict
+        +save_rules_file()
+    }
+
+    %% ── 閉環 Agents ──
+    class field_trial {
+        <<agent: daily cron>>
+        +run(date) dict
+        +build_prompt(data, thresholds, template) str
+        +load_reference(filename) str
+    }
+
+    class release_manager {
+        <<agent: daily cron>>
+        +run(date) dict
+        +build_release_note() str
+        +log_version(version, desc)
+    }
+
+    class task_manager {
+        <<module: internal>>
+        +run(date, field_result) dict
+        +auto_resolve_tasks(tasks, data) list
+        +build_prompt(date, summary, rules, pending) str
+    }
+
+    class coordinator {
+        <<agent: daily cron>>
+        +run(date, force) dict
+        +collect_inputs(date) dict
+        +parse_claude_response(raw) dict
+        +append_history(date, parsed)
+    }
+
+    class notifier_agent {
+        <<agent: daily cron>>
+        +run(date)
+        +extract_summary_lines(output_dir) list
+        +extract_summary_dict(output_dir) dict
+        +read_coordination_summary(output_dir) str
+    }
+
+    class bom_validator {
+        <<agent: daily cron>>
+        +run() dict
+        +check_completeness(rows, required) list
+        +summarize_by_model(rows) dict
+        +recent_changes(history, limit) list
+    }
+
+    %% ── 手動 Agents ──
+    class edge_inspector {
+        <<agent: manual + cron>>
+        +run(command, send, group)
+        +build_fanspeed_report(rooms) str
+        +build_report(edges, command) str
+    }
+
+    class system_architect {
+        <<agent: manual>>
+        +run(command)
+        +check_field_consistency() dict
+        +check_device_versions() dict
+    }
+
+    class cost_down {
+        <<agent: manual>>
+        +run(model) dict
+        +analyze_current_bom(bom) dict
+        +analyze_history(history) dict
+    }
+
+    %% ── 依賴關係 ──
+    field_trial --> db : query_all\nlog_control_event
+    field_trial --> history : append_field_daily
+    field_trial --> ai : claude_analyze
+
+    release_manager --> task_manager : run()
+    release_manager --> data_health : run_health_check
+    release_manager --> history : load_task_tracker
+
+    task_manager --> db : query raw data
+    task_manager --> history : task CRUD
+    task_manager --> ai : claude_analyze
+
+    coordinator --> ai : claude_analyze
+
+    notifier_agent --> notify : send_telegram\nsend_line\nsend_gmail
+
+    edge_inspector --> db : query_edges\nquery_fan_speed
+
+    system_architect --> db : load_all_rooms
+    system_architect --> history : load_fields
+
+    cost_down --> history : load_bom_current
+
+    db --> DecimalEncoder : json.dumps(Decimal)

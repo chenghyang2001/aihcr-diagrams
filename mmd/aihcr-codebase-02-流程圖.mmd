@@ -1,0 +1,52 @@
+flowchart TD
+  CRON(["⏰ Cron 04:00\nAsia/Taipei"])
+  LOCK{"flock -n\n取得鎖?"}
+  EXIT(["exit 0 軟退出\n另一實例正在跑"])
+
+  subgraph FTG["🏠 Agent 1 — field_trial.py（FATAL）"]
+    FT1["MySQL JOIN ON\n68 rooms 24h 資料"]
+    FT2["寫 field_daily.csv\n寫 control_events.csv"]
+    FT3["Claude → field_trial_summary.md\nPM2.5+VOC 分析報告"]
+    FT1 --> FT2 --> FT3
+  end
+
+  subgraph RMG["📋 Agent 2 — release_manager.py"]
+    RM1["task_manager 自動 resolve\n+ Claude 產新任務"]
+    RM2["data_health 六表稽核"]
+    RM3["release_note.md"]
+    RM1 --> RM2 --> RM3
+  end
+
+  BV["⚡ Agent 3 — bom_validator.py\nBOM 完整性 + 變動報告"]
+  CO["🎯 Agent 4 — coordinator.py\n讀前 4 agent 輸出\nClaude → Top-3 JSON"]
+
+  GIT["Git Push\nGitHub Pages 更新\n(4×30s poll 確認)"]
+
+  subgraph NTG["📡 Agent 5 — notifier.py"]
+    TG["Telegram\n即時推送"]
+    LN["LINE\n即時推送"]
+    GM["Gmail\nHTML + 報告"]
+  end
+
+  DONE(["✅ 完成"])
+  FATAL(["❌ exit 1 FATAL"])
+
+  CRON --> LOCK
+  LOCK -->|"已鎖定"| EXIT
+  LOCK -->|"取得鎖"| FTG
+  FTG -->|"失敗"| FATAL
+  FTG -->|"成功"| RMG
+  RMG --> BV
+  BV --> CO
+  CO --> GIT
+  GIT --> NTG
+  TG --> DONE
+  LN --> DONE
+  GM --> DONE
+
+  style FTG fill:#fff0e6,stroke:#e67e22,stroke-width:2px
+  style RMG fill:#eaf4fb,stroke:#2980b9,stroke-width:2px
+  style BV fill:#fef9e7,stroke:#f39c12,stroke-width:1.5px
+  style CO fill:#eafaf1,stroke:#27ae60,stroke-width:1.5px
+  style NTG fill:#f5eef8,stroke:#8e44ad,stroke-width:2px
+  style FATAL fill:#fde8e8,stroke:#e74c3c,stroke-width:2px
