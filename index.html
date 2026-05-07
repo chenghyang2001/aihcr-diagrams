@@ -241,6 +241,9 @@ IMAGES.forEach((item, i) => {
   thumbsEl.appendChild(t);
 });
 
+// Autoplay state vars declared here (before goTo) to avoid TDZ crash in resetAutoTimer
+let autoSpeed = 5000, autoLoop = true, autoTimer = null, progTimer = null, progStart = 0;
+
 goTo(0);
 
 // ── Keyboard ───────────────────────────────────────────────
@@ -306,8 +309,6 @@ const ddToggle = document.getElementById('dd-toggle');
 const ddMenu   = document.getElementById('auto-dropdown');
 const loopItem = document.getElementById('loop-item');
 const progBar  = document.getElementById('progress-bar');
-
-let autoSpeed = 5000, autoLoop = true, autoTimer = null, progTimer = null, progStart = 0;
 
 function startAutoplay() {
   clearInterval(autoTimer); clearInterval(progTimer);
